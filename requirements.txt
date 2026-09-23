@@ -1,0 +1,5 @@
+cryptography
+pytest
+fastapi
+uvicorn
+httpx
