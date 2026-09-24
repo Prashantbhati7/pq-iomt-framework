@@ -43,8 +43,7 @@ class AESGCMCipher:
         nonce, blob = self.encrypt(plaintext, associated_data)
         return nonce, blob[:-16], blob[-16:]
 
-    def decrypt_detached(self, nonce: bytes, ciphertext: bytes, tag: bytes,
-                         associated_data: bytes = None):
+    def decrypt_detached(self, nonce: bytes, ciphertext: bytes, tag: bytes,associated_data: bytes = None):
         return self.decrypt(nonce, ciphertext + tag, associated_data)
     
 
