@@ -34,9 +34,9 @@ def test_sizes_match_paper():
 def test_signature_valid_and_tamper_detected():
     print("\n \n testing signature")
     signer = Signer()
-    h = sha3_256(b"telemetry")
+    h = sha3_256(b"telemetry")     # hashed 
     print(f"the hash is: {h}")
-    sig = signer.sign(h)
+    sig = signer.sign(h)    # signed 
     # print(f"the signature is: {sig}")
     print(f"Length of signature is: {len(sig)}")   #. 2420
     assert verify(h, sig, signer.public_key)
