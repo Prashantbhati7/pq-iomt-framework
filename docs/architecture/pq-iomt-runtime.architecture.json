@@ -1,0 +1,151 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "PQ-IoMT Framework — Runtime Architecture",
+    "locale": "en",
+    "quality_profile": "showcase",
+    "repository": {
+      "url": "https://github.com/Prashantbhati7/pq-iomt-framework.git",
+      "provider": "github",
+      "revision": "e6718cda60a4230a8fd491499a4dbce7f6e86b5a"
+    },
+    "viewBox": [1390, 760]
+  },
+  "components": [
+    {
+      "id": "device",
+      "type": "external",
+      "label": "IoMT Device",
+      "sublabel": "ClientNode · ML-DSA signing + HMAC",
+      "tag": "Telemetry producer",
+      "pos": [70, 360],
+      "size": [210, 88],
+      "sources": [
+        { "path": "src/entities/client.py", "line": 10, "end_line": 35, "label": "ClientNode" }
+      ]
+    },
+    {
+      "id": "qses",
+      "type": "backend",
+      "label": "QSES Edge Server",
+      "sublabel": "Verify · encapsulate · encrypt · sign",
+      "tag": "Freshness + replay gate",
+      "pos": [450, 360],
+      "size": [245, 88],
+      "sources": [
+        { "path": "src/entities/qses.py", "line": 13, "end_line": 69, "label": "QSESNode" }
+      ]
+    },
+    {
+      "id": "medical-server",
+      "type": "backend",
+      "label": "Medical Server",
+      "sublabel": "Verify · decapsulate · decrypt · validate",
+      "tag": "Acceptance authority",
+      "pos": [865, 360],
+      "size": [250, 88]
+    },
+    {
+      "id": "readings-store",
+      "type": "database",
+      "label": "Accepted Readings",
+      "sublabel": "In-memory StoredReading[]",
+      "tag": "Process-local state",
+      "pos": [1180, 360],
+      "size": [170, 88]
+    },
+    {
+      "id": "provisioning",
+      "type": "security",
+      "label": "Trust Bootstrap",
+      "sublabel": "Registered keys, HMAC key, QSES nonce",
+      "tag": "Pre-runtime configuration",
+      "pos": [480, 110],
+      "size": [270, 76],
+      "sources": [
+        { "path": "src/entities/qses.py", "line": 26, "end_line": 27, "label": "QSES registration" }
+      ]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "Hospital-side process",
+      "wraps": ["medical-server", "readings-store"],
+      "pad": 38
+    }
+  ],
+  "connections": [
+    {
+      "id": "provision-qses",
+      "from": "provisioning",
+      "to": "qses",
+      "label": "device public key registry",
+      "variant": "dashed",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "labelAt": [385, 270]
+    },
+    {
+      "id": "provision-server",
+      "from": "provisioning",
+      "to": "medical-server",
+      "label": "trusted QSES key + client record",
+      "variant": "dashed",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "id": "device-to-qses",
+      "from": "device",
+      "to": "qses",
+      "label": "ClientPacket · 2,584 B · ML-DSA + HMAC",
+      "variant": "emphasis",
+      "labelAt": [365, 462]
+    },
+    {
+      "id": "qses-to-server",
+      "from": "qses",
+      "to": "medical-server",
+      "label": "EdgePacket · 5,832 B · ML-KEM + AES-256-GCM + ML-DSA",
+      "variant": "security",
+      "labelAt": [780, 462]
+    },
+    {
+      "id": "store-reading",
+      "from": "medical-server",
+      "to": "readings-store",
+      "label": "accepted StoredReading",
+      "variant": "emphasis",
+      "labelAt": [1150, 462]
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Runtime path",
+      "items": [
+        "The device signs padded telemetry and attaches a SHA3-256 HMAC.",
+        "QSES checks client identity, timestamp, sequence, and device signature before forwarding.",
+        "The medical server verifies the edge signature, decrypts the client packet, and rechecks end-to-end integrity."
+      ]
+    },
+    {
+      "dot": "violet",
+      "title": "Cryptographic roles",
+      "items": [
+        "ML-DSA-44 signs device and QSES content; ML-KEM-512 establishes the per-packet shared secret.",
+        "HKDF-SHA256 derives the AES-256-GCM key from the ML-KEM secret and a fresh salt."
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "Implementation boundary",
+      "items": [
+        "The repository models nodes and packets in-process; it contains no HTTP endpoint, message broker, or network transport implementation.",
+        "Client records, replay state, anomaly logs, retransmission requests, and accepted readings are process-local Python collections."
+      ]
+    }
+  ]
+}
