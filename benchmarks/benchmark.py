@@ -76,7 +76,6 @@ def print_table(title, rows):
               f"{s['p95']:>9.3f}{s['stdev']:>9.3f}")
 
 
-# ------------------------------------------------------------------- main
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--iterations", type=int, default=200,
@@ -84,7 +83,7 @@ def main():
     n = parser.parse_args().iterations
     total = n + WARMUP
 
-    # ---- setup: one device, one QSES, one server ----
+    #  setup: one device, one QSES, one server 
     server = MedicalServerNode(server_id=9)
     client = ClientNode(client_id=1, server_id=9, session_id=3, qses_nonce=222)
     qses = QSESNode(server.public_key, max_age_ms=10 * 60 * 1000)

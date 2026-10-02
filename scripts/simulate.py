@@ -53,7 +53,7 @@ def build_network():
 def happy_path(client, qses, server, telemetry: bytes):
     section("PHASE 1 -- IoMT Device signs the reading")
     print(f"  telemetry: {telemetry!r}")
-    pkt = client.create_signed_reading(telemetry)
+    pkt = client.create_signed_reading(telemetry) 
     m = pkt.metadata
     step("padded message", hexpreview(pkt.message))
     step("metadata", f"client_id={m.client_id} seq={m.seq} "
