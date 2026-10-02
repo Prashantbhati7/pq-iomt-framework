@@ -1,0 +1,181 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "PQ-IoMT Framework — Runtime Architecture",
+    "locale": "en",
+    "quality_profile": "showcase",
+    "repository": {
+      "url": "https://github.com/Prashantbhati7/pq-iomt-framework.git",
+      "provider": "github",
+      "revision": "f8f222e678b4bdaa7cee3fc75d5aaac950b4e8b9"
+    },
+    "viewBox": [1395, 820]
+  },
+  "components": [
+    {
+      "id": "trust-bootstrap",
+      "type": "security",
+      "label": "Trust Bootstrap",
+      "sublabel": "Keys, client record, nonce, HMAC key",
+      "tag": "Pre-runtime setup",
+      "pos": [435, 100],
+      "size": [270, 78],
+      "sources": [
+        { "path": "scripts/simulate.py", "line": 41, "end_line": 50, "label": "Network setup" },
+        { "path": "src/entities/server.py", "line": 47, "end_line": 51, "label": "Trust registration" }
+      ]
+    },
+    {
+      "id": "device",
+      "type": "external",
+      "label": "IoMT Device",
+      "sublabel": "ClientNode · ML-DSA signing + HMAC",
+      "tag": "Telemetry producer",
+      "pos": [80, 355],
+      "size": [220, 88],
+      "sources": [
+        { "path": "src/entities/client.py", "line": 9, "end_line": 35, "label": "ClientNode" }
+      ]
+    },
+    {
+      "id": "qses",
+      "type": "backend",
+      "label": "QSES Edge Server",
+      "sublabel": "Verify · encapsulate · encrypt · sign",
+      "tag": "Freshness + replay gate",
+      "pos": [445, 355],
+      "size": [255, 88],
+      "sources": [
+        { "path": "src/entities/qses.py", "line": 13, "end_line": 69, "label": "QSESNode" }
+      ]
+    },
+    {
+      "id": "medical-server",
+      "type": "backend",
+      "label": "Medical Server",
+      "sublabel": "Verify · decapsulate · decrypt · validate",
+      "tag": "Acceptance authority",
+      "pos": [840, 355],
+      "size": [260, 88],
+      "sources": [
+        { "path": "src/entities/server.py", "line": 32, "end_line": 118, "label": "MedicalServerNode" }
+      ]
+    },
+    {
+      "id": "readings-store",
+      "type": "database",
+      "label": "Accepted Readings",
+      "sublabel": "In-memory StoredReading[]",
+      "tag": "Process-local state",
+      "pos": [1170, 355],
+      "size": [180, 88],
+      "sources": [
+        { "path": "src/entities/server.py", "line": 15, "end_line": 20, "label": "StoredReading" },
+        { "path": "src/entities/server.py", "line": 105, "end_line": 115, "label": "Commit reading" }
+      ]
+    },
+    {
+      "id": "demo-runner",
+      "type": "external",
+      "label": "Guided Demo & Simulator",
+      "sublabel": "Jupyter notebook · CLI simulation",
+      "tag": "Local developer runner",
+      "pos": [80, 590],
+      "size": [250, 82],
+      "sources": [
+        { "path": "scripts/pq_iomt_demo.ipynb", "label": "Interactive demo" },
+        { "path": "scripts/simulate.py", "line": 53, "end_line": 151, "label": "CLI walkthrough" }
+      ]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "Prototype execution — all runtime roles are Python objects in one process",
+      "wraps": ["device", "qses", "medical-server", "readings-store"],
+      "pad": 42
+    }
+  ],
+  "connections": [
+    {
+      "id": "bootstrap-to-qses",
+      "from": "trust-bootstrap",
+      "to": "qses",
+      "label": "device ML-DSA key + server ML-KEM key",
+      "variant": "dashed",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "labelAt": [340, 250]
+    },
+    {
+      "id": "bootstrap-to-server",
+      "from": "trust-bootstrap",
+      "to": "medical-server",
+      "label": "QSES ML-DSA key + client record",
+      "variant": "dashed",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "id": "device-to-qses",
+      "from": "device",
+      "to": "qses",
+      "label": "ClientPacket · 2,584 B · plaintext · ML-DSA + HMAC",
+      "variant": "emphasis",
+      "labelAt": [324, 457]
+    },
+    {
+      "id": "qses-to-server",
+      "from": "qses",
+      "to": "medical-server",
+      "label": "EdgePacket · 5,832 B · ML-KEM + AES-256-GCM + ML-DSA",
+      "variant": "security",
+      "labelAt": [788, 457]
+    },
+    {
+      "id": "store-reading",
+      "from": "medical-server",
+      "to": "readings-store",
+      "label": "accepted StoredReading",
+      "variant": "emphasis",
+      "labelAt": [1173, 457]
+    },
+    {
+      "id": "demo-starts-flow",
+      "from": "demo-runner",
+      "to": "device",
+      "label": "starts happy path and attack scenarios",
+      "variant": "dashed",
+      "fromSide": "top",
+      "toSide": "bottom"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Runtime path",
+      "items": [
+        "The device pads telemetry to 100 bytes, emits metadata, signs SHA3-256(M || metadata), and attaches an HMAC.",
+        "QSES authenticates the device and freshness before wrapping the complete client packet for the medical server.",
+        "The server validates transport and end-to-end integrity before committing an accepted reading."
+      ]
+    },
+    {
+      "dot": "violet",
+      "title": "Trust and protection",
+      "items": [
+        "ML-DSA-44 signs device and edge content; ML-KEM-512 plus HKDF-SHA256 derives the AES-256-GCM packet key.",
+        "The HMAC key is shared only by the device and medical server, allowing the server to flag a compromised QSES."
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "Demo and evaluation",
+      "items": [
+        "The notebook demonstrates a successful reading, replay rejection, transport-signature rejection, and malicious-edge HMAC detection.",
+        "The benchmark measures the same in-process pipeline and writes timing, resource, and packet-size results to benchmarks/results.json."
+      ]
+    }
+  ]
+}
