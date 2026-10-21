@@ -18,14 +18,14 @@ def _u32(x: int) -> bytes:
     return struct.pack(">I", x)
 
 
-def offer_bytes(client_id: int, n_i: bytes, n_q: bytes, session_id: int, pk_kem: bytes) -> bytes:
-    """What the QSES signs in handshake step 2 (sigma_Q)."""
-    return b"OFFER" + _u32(client_id) + n_i + n_q + _u32(session_id) + pk_kem
+def hello_bytes(client_id: int, n_i: bytes, pk_kem: bytes) -> bytes:
+    """What the sensor signs in handshake step 1 (sigma_D): its id, nonce and Kyber public key."""
+    return b"HELLO" + _u32(client_id) + n_i + pk_kem
 
 
-def finish_bytes(client_id: int, n_i: bytes, n_q: bytes, session_id: int, ct: bytes) -> bytes:
-    """What the sensor signs in handshake step 4 (sigma_D)."""
-    return b"FINISH" + _u32(client_id) + n_i + n_q + _u32(session_id) + ct
+def reply_bytes(client_id: int, n_i: bytes, n_q: bytes, session_id: int, ct: bytes) -> bytes:
+    """What the QSES signs in handshake step 2 (sigma_Q). Contains the sensor's n_i."""
+    return b"REPLY" + _u32(client_id) + n_i + n_q + _u32(session_id) + ct
 
 
 @dataclass(frozen=True)
