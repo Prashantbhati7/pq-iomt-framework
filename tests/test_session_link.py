@@ -1,5 +1,6 @@
 import pytest
 
+from src.crypto.kem import KEMKeyPair
 from src.entities.secure_client import SecureClientNode
 from src.entities.secure_qses import SecureQSESNode
 from src.entities.server import MedicalServerNode
@@ -20,10 +21,16 @@ def make_system():
 
 
 def handshake(qses, client):
-    cid, n_i = client.begin_session()
-    pk_kem, n_q, sid, sig_q = qses.offer_session(cid, n_i)
-    ct, sig_d = client.complete_session(pk_kem, n_q, sid, sig_q)
-    return qses.finish_session(cid, ct, sig_d)
+    cid, n_i, pk_kem, sig_d = client.begin_session()            # step 1: sensor -> QSES
+    n_q, sid, ct, sig_q = qses.accept_session(cid, n_i, pk_kem, sig_d)   # step 2: QSES -> sensor
+    client.complete_session(n_q, sid, ct, sig_q)                # step 3: sensor finishes
+    return sid
+
+
+def test_both_sides_derive_the_same_key():
+    _, qses, client = make_system()
+    sid = handshake(qses, client)
+    assert client._link_cipher.key == qses.sessions[sid].key
 
 
 def test_end_to_end_reading_is_stored():
@@ -84,29 +91,42 @@ def test_replayed_link_packet_rejected():
         qses.receive_from_sensor(pkt)
 
 
-def test_rogue_qses_offer_rejected_by_sensor():
+def test_rogue_qses_reply_rejected_by_sensor():
     server, qses, client = make_system()
     rogue = SecureQSESNode(server.public_key)          # different signing key
     rogue.register_client(1, client.public_key)
-    cid, n_i = client.begin_session()
-    pk_kem, n_q, sid, sig_q = rogue.offer_session(cid, n_i)
-    with pytest.raises(ProtocolError, match="offer"):
-        client.complete_session(pk_kem, n_q, sid, sig_q)
+    hello = client.begin_session()
+    reply = rogue.accept_session(*hello)
+    with pytest.raises(ProtocolError, match="reply"):
+        client.complete_session(*reply)
 
 
-def test_replayed_old_offer_rejected_by_sensor():
+def test_replayed_old_reply_rejected_by_sensor():
     _, qses, client = make_system()
-    cid, n_i = client.begin_session()
-    old_offer = qses.offer_session(cid, n_i)           # attacker records this
-    cid, n_i2 = client.begin_session()                 # a new session, new n_i
-    with pytest.raises(ProtocolError, match="offer"):
-        client.complete_session(*old_offer)
+    old_reply = qses.accept_session(*client.begin_session())   # attacker records this
+    client.begin_session()                                     # new request: new n_i, new Kyber pair
+    with pytest.raises(ProtocolError, match="reply"):
+        client.complete_session(*old_reply)
 
 
-def test_forged_finish_rejected_by_qses():
+def test_forged_hello_rejected_by_qses():
     _, qses, client = make_system()
-    cid, n_i = client.begin_session()
-    pk_kem, n_q, sid, sig_q = qses.offer_session(cid, n_i)
-    ct, sig_d = client.complete_session(pk_kem, n_q, sid, sig_q)
+    cid, n_i, pk_kem, sig_d = client.begin_session()
     with pytest.raises(ProtocolError, match="handshake signature"):
-        qses.finish_session(cid, ct, b"\x00" * len(sig_d))
+        qses.accept_session(cid, n_i, pk_kem, b"\x00" * len(sig_d))
+
+
+def test_swapped_kyber_key_rejected_by_qses():
+    _, qses, client = make_system()
+    cid, n_i, pk_kem, sig_d = client.begin_session()
+    attacker_pk = KEMKeyPair().public_key              # attacker substitutes their own padlock
+    with pytest.raises(ProtocolError, match="handshake signature"):
+        qses.accept_session(cid, n_i, attacker_pk, sig_d)
+
+
+def test_replayed_hello_rejected_by_qses():
+    _, qses, client = make_system()
+    hello = client.begin_session()
+    qses.accept_session(*hello)
+    with pytest.raises(ProtocolError, match="replayed handshake"):
+        qses.accept_session(*hello)
